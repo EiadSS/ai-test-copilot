@@ -51,9 +51,3 @@ curl "http://localhost:8000/api/jobs/<JOB_ID>"
 curl "http://localhost:8000/api/projects/<PROJECT_ID>/test-plans/latest"
 ```
 
-## What’s next (we’ll do this together)
-
-- Add a simple Next.js UI (projects, uploads, test plan viewer)
-- Generate Playwright test code + export as a zip / push to GitHub
-- Runs dashboard (GitHub Actions → upload artifacts → show in UI)
-
