@@ -1,0 +1,20 @@
+App Requirements (Demo)
+
+Users can sign up and log in.
+Login requires email + password.
+After login, users can view their profile.
+Users can update profile fields: name, bio, avatar URL.
+Users can log out.
+
+API
+POST /auth/register
+POST /auth/login
+GET /me
+PATCH /me
+POST /auth/logout
+
+Validation / Errors
+- Password must be 8+ chars.
+- Email must be valid.
+- Return 401 for invalid token.
+- Rate limit login to 5 attempts/min per IP.
