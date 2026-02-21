@@ -25,12 +25,12 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Download generated Playwright tests zip
+      - name: Generate Playwright tests zip (CI)
         run: |
-          curl -L "http://localhost:8000/api/projects/4bf3b303-8d47-43a1-b7c8-7cf2e05e0213/test-plans/latest/playwright-api.zip" -o pw.zip
+          python -m pip install -r backend/requirements.txt
+          PYTHONPATH=backend python demo/generate_zip.py
           mkdir -p pw
           unzip -o pw.zip -d pw
-          ls -la pw
           ls -la pw/*
 
       - name: Install Playwright deps
