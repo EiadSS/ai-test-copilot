@@ -25,17 +25,33 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Install Playwright deps
-        working-directory: playwright/demo-project-playwright-api-tests
+      - name: Download generated Playwright tests zip
         run: |
+          curl -L "http://localhost:8000/api/projects/4bf3b303-8d47-43a1-b7c8-7cf2e05e0213/test-plans/latest/playwright-api.zip" -o pw.zip
+          mkdir -p pw
+          unzip -o pw.zip -d pw
+          ls -la pw
+          ls -la pw/*
+
+      - name: Install Playwright deps
+        run: |
+          cd pw/*-playwright-api-tests
           npm install
           npx playwright install --with-deps
 
       - name: Run tests
-        working-directory: playwright/demo-project-playwright-api-tests
         env:
           BASE_URL: http://localhost:8000/api/
-        run: npm test
+        run: |
+          cd pw/*-playwright-api-tests
+          npm test
+
+      - name: Upload Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: pw/*-playwright-api-tests/test-results
 
       - name: Upload Playwright report/artifacts
         if: always()
