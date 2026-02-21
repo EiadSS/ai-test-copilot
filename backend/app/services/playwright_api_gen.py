@@ -56,7 +56,7 @@ def _infer_payload(method: str, path: str, test: dict) -> dict | None:
     # basic realistic defaults
     if method == "POST" and path == "/auth/register":
         pw = "Password123!"
-        if "short" in title or "8" in title:
+        if "short" in title or "shorter" in title or "<8" in title or "less than 8" in title or "too short" in title:
             pw = "short"
         email = "user@example.com"
         if "invalid email" in title or "invalid" in title and "email" in title:
@@ -64,7 +64,11 @@ def _infer_payload(method: str, path: str, test: dict) -> dict | None:
         return {"email": email, "password": pw}
     if method == "POST" and path == "/auth/login":
         pw = "Password123!"
-        if "short" in title or "8" in title:
+        # wrong password case
+        if "wrong password" in title:
+            pw = "WrongPassword123!"
+        # too-short password case
+        if "short" in title or "shorter" in title or "<8" in title or "less than 8" in title or "too short" in title:
             pw = "short"
         email = "user@example.com"
         if "invalid email" in title or ("invalid" in title and "email" in title):
@@ -123,9 +127,25 @@ export default defineConfig({
     lines: list[str] = []
     lines.append("import { test, expect } from '@playwright/test';")
     lines.append("")
+    # Self-contained auth bootstrap
+    lines.append("let AUTH_TOKEN: string | null = null;")
+    lines.append("const DEMO_EMAIL = process.env.DEMO_EMAIL || 'user@example.com';")
+    lines.append("const DEMO_PASSWORD = process.env.DEMO_PASSWORD || 'Password123!';")
+    lines.append("")
+    lines.append("test.beforeAll(async ({ request }) => {")
+    lines.append(
+        "  const reg = await request.post('auth/register', { data: { email: DEMO_EMAIL, password: DEMO_PASSWORD } });")
+    lines.append("  // 201 = created, 409 = already exists (fine for reruns)")
+    lines.append("  if (![201, 409].includes(reg.status())) throw new Error(`register failed: ${reg.status()}`);")
+    lines.append(
+        "  const login = await request.post('auth/login', { data: { email: DEMO_EMAIL, password: DEMO_PASSWORD } });")
+    lines.append("  if (!login.ok()) throw new Error(`login failed: ${login.status()}`);")
+    lines.append("  const body = await login.json();")
+    lines.append("  AUTH_TOKEN = body.token;")
+    lines.append("});")
+    lines.append("")
     lines.append("function authHeaders() {")
-    lines.append("  const t = process.env.AUTH_TOKEN;")
-    lines.append("  return t ? { Authorization: `Bearer ${t}` } : {};")
+    lines.append("  return AUTH_TOKEN ? { Authorization: `Bearer ${AUTH_TOKEN}` } : {};")
     lines.append("}")
     lines.append("")
 
@@ -139,33 +159,69 @@ export default defineConfig({
             title = (t.get("title") or "Untitled").strip().replace("'", "\\'")
             method_path = _infer_endpoint(t)
             method, path = method_path if method_path else ("GET", "/")
-            payload = _infer_payload(method, path, t)
+
+            raw_path = path
+            req_path = raw_path.lstrip("/")  # keep baseURL (/api)
+
+            payload = _infer_payload(method, raw_path, t)
             expected = t.get("expected") or []
             steps = t.get("steps") or []
 
             lines.append(f"test('{tid} - {title}', async ({{ request }}) => {{")
-            lines.append("  const headers = { ...authHeaders() };")
+            blob = " ".join([title.lower()] + [str(x).lower() for x in expected] + [str(x).lower() for x in steps])
+            if "missing" in blob and "token" in blob:
+                lines.append("  const headers = {};")
+            elif "invalid token" in blob:
+                lines.append("  const headers = { Authorization: 'Bearer invalid' };")
+            else:
+                lines.append("  const headers = { ...authHeaders() };")
+
             if method in ("POST", "PUT", "PATCH") and payload is not None:
                 lines.append(
-                    f"  const resp = await request.{method.lower()}('{path}', {{ headers, data: {json.dumps(payload)} }});"
+                    f"  const resp = await request.{method.lower()}('{req_path}', {{ headers, data: {json.dumps(payload)} }});"
                 )
             else:
-                lines.append(f"  const resp = await request.{method.lower()}('{path}', {{ headers }});")
+                lines.append(f"  const resp = await request.{method.lower()}('{req_path}', {{ headers }});")
 
             blob = " ".join([title.lower()] + [str(x).lower() for x in expected] + [str(x).lower() for x in steps])
-            if "401" in blob or "unauthor" in blob or "invalid token" in blob:
+
+            if "rate limit" in blob and req_path == "auth/login":
+                lines.append("  // Trigger rate limit with repeated bad passwords")
+                lines.append("  let lastStatus = 0;")
+                lines.append("  for (let i = 0; i < 6; i++) {")
+                lines.append(
+                    "    const r = await request.post('auth/login', { data: { email: DEMO_EMAIL, password: 'WrongPassword123!' } });")
+                lines.append("    lastStatus = r.status();")
+                lines.append("  }")
+                lines.append("  expect(lastStatus).toBe(429);")
+                lines.append("});")
+                lines.append("")
+                continue
+
+            # Smarter expectations
+            # Smarter expectations
+            if ("wrong password" in blob) or ("invalid credentials" in blob):
                 lines.append("  expect(resp.status()).toBe(401);")
-            elif "rate limit" in blob or "429" in blob:
-                lines.append("  expect([200, 201, 204, 429]).toContain(resp.status());")
+            elif any(k in blob for k in
+                     ["reject", "invalid email", "password shorter", "shorter than 8", "too short", "<8",
+                      "less than 8"]):
+                lines.append("  expect(resp.status()).toBe(400);")
+            elif "missing or invalid token" in blob or "invalid token" in blob:
+                lines.append("  expect(resp.status()).toBe(401);")
+            elif "429" in blob:
+                lines.append("  expect(resp.status()).toBe(429);")
             else:
-                lines.append("  expect(resp.ok()).toBeTruthy();")
+                # Register "success" can be 201 (created) or 409 (already exists) on reruns
+                if ("register succeeds" in blob) or (req_path == "auth/register" and "succeed" in blob):
+                    lines.append("  expect([201, 409]).toContain(resp.status());")
+                else:
+                    lines.append("  expect([200, 201, 204]).toContain(resp.status());")
 
             lines.append("});")
             lines.append("")
 
-    spec_ts = "\\n".join(lines)
+    spec_ts = "\n".join(lines)
 
-    # --- Zip it ---
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         root = f"{slug}-playwright-api-tests"
