@@ -1,7 +1,11 @@
 import uuid
+import io
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import select, desc
+from fastapi.responses import StreamingResponse
+from app.services.playwright_api_gen import generate_playwright_api_tests_zip
+from fastapi.responses import Response
 
 from app.db.session import get_db
 from app.db.models import Project, Document, Chunk, TestPlan
@@ -109,3 +113,29 @@ def latest_test_plan(project_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="No test plans yet")
 
     return {"id": str(plan.id), "job_id": plan.job_id, "created_at": plan.created_at, "plan": plan.plan_json}
+
+@router.get("/{project_id}/test-plans/latest/playwright-api.zip")
+def download_latest_playwright_api_zip(project_id: str, db: Session = Depends(get_db)):
+    try:
+        pid = uuid.UUID(project_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid project_id")
+
+    proj = db.get(Project, pid)
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    plan = db.execute(
+        select(TestPlan).where(TestPlan.project_id == pid).order_by(desc(TestPlan.created_at)).limit(1)
+    ).scalars().first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="No test plans yet")
+
+    zip_bytes = generate_playwright_api_tests_zip(plan.plan_json, project_name=proj.name)
+    filename = "playwright-api-tests.zip"
+
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="playwright-api-tests.zip"'},
+    )
