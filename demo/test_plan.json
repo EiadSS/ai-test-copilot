@@ -1,0 +1,370 @@
+{
+  "id": "b0765801-525d-4ffe-a1c6-238df99e9d8c",
+  "job_id": "08edba3c-fe5a-4027-8fea-41714934b702",
+  "created_at": "2026-02-20T21:31:19.490217",
+  "plan": {
+    "project_overview": "Demo app with user authentication and profile management. Users can register and log in using email/password, view their profile after login, update profile fields (name, bio, avatar URL), and log out. API includes /auth/register, /auth/login, /me (GET, PATCH), and /auth/logout. Validation includes password length (>=8), valid email format, 401 for invalid token, and login rate limiting (5 attempts/min per IP).",
+    "tests": [
+      {
+        "id": "T001",
+        "priority": "P0",
+        "title": "Register succeeds with valid email and password (>=8 chars)",
+        "type": "api",
+        "preconditions": [
+          "A unique email address not yet registered"
+        ],
+        "steps": [
+          "Send POST /auth/register with body: {\"email\":\"new.user@example.com\",\"password\":\"Passw0rd!\"}"
+        ],
+        "expected": [
+          "Response status indicates success (e.g., 200/201)",
+          "Response does not include password in clear text",
+          "User can subsequently log in with the same credentials"
+        ],
+        "tags": [
+          "auth",
+          "register",
+          "happy-path",
+          "security"
+        ],
+        "sources": [
+          "Chunk 00feabb9-863c-47ec-9741-948202fcfbc6"
+        ]
+      },
+      {
+        "id": "T002",
+        "priority": "P0",
+        "title": "Register rejects invalid email format",
+        "type": "api",
+        "preconditions": [],
+        "steps": [
+          "Send POST /auth/register with body: {\"email\":\"not-an-email\",\"password\":\"Passw0rd!\"}"
+        ],
+        "expected": [
+          "Request is rejected with a 4xx validation error",
+          "Error message indicates invalid email"
+        ],
+        "tags": [
+          "auth",
+          "register",
+          "validation",
+          "negative"
+        ],
+        "sources": [
+          "Chunk 00feabb9-863c-47ec-9741-948202fcfbc6"
+        ]
+      },
+      {
+        "id": "T003",
+        "priority": "P0",
+        "title": "Register rejects password shorter than 8 characters",
+        "type": "api",
+        "preconditions": [],
+        "steps": [
+          "Send POST /auth/register with body: {\"email\":\"short.pass@example.com\",\"password\":\"1234567\"}"
+        ],
+        "expected": [
+          "Request is rejected with a 4xx validation error",
+          "Error message indicates password must be 8+ characters"
+        ],
+        "tags": [
+          "auth",
+          "register",
+          "validation",
+          "negative"
+        ],
+        "sources": [
+          "Chunk 00feabb9-863c-47ec-9741-948202fcfbc6"
+        ]
+      },
+      {
+        "id": "T004",
+        "priority": "P0",
+        "title": "Login succeeds with valid email + password",
+        "type": "api",
+        "preconditions": [
+          "User account exists (registered)"
+        ],
+        "steps": [
+          "Send POST /auth/login with body: {\"email\":\"existing.user@example.com\",\"password\":\"Passw0rd!\"}"
+        ],
+        "expected": [
+          "Response status indicates success",
+          "An auth token/session is issued (e.g., access token in body or session cookie) that can be used for authenticated requests"
+        ],
+        "tags": [
+          "auth",
+          "login",
+          "happy-path"
+        ],
+        "sources": [
+          "Chunk 00feabb9-863c-47ec-9741-948202fcfbc6"
+        ]
+      },
+      {
+        "id": "T005",
+        "priority": "P0",
+        "title": "Login rejects wrong password",
+        "type": "api",
+        "preconditions": [
+          "User account exists (registered)"
+        ],
+        "steps": [
+          "Send POST /auth/login with body: {\"email\":\"existing.user@example.com\",\"password\":\"WrongPass1!\"}"
+        ],
+        "expected": [
+          "Request is rejected with an authentication error (4xx)",
+          "No auth token/session is issued"
+        ],
+        "tags": [
+          "auth",
+          "login",
+          "negative"
+        ],
+        "sources": [
+          "Chunk 00feabb9-863c-47ec-9741-948202fcfbc6"
+        ]
+      },
+      {
+        "id": "T006",
+        "priority": "P0",
+        "title": "Login rate limit enforced: >5 attempts/min per IP are blocked",
+        "type": "api",
+        "preconditions": [
+          "Use a single client IP (no proxy rotation)",
+          "User account exists (registered)"
+        ],
+        "steps": [
+          "Within 60 seconds, send 5 POST /auth/login requests with invalid credentials from the same IP",
+          "Send a 6th POST /auth/login request within the same 60-second window"
+        ],
+        "expected": [
+          "First 5 attempts return authentication failure (4xx) but are processed",
+          "6th attempt is blocked due to rate limiting (commonly 429 Too Many Requests) with a rate-limit related error message/headers if provided"
+        ],
+        "tags": [
+          "auth",
+          "login",
+          "rate-limit",
+          "abuse-prevention"
+        ],
+        "sources": [
+          "Chunk 00feabb9-863c-47ec-9741-948202fcfbc6"
+        ]
+      },
+      {
+        "id": "T007",
+        "priority": "P0",
+        "title": "GET /me returns profile for authenticated user",
+        "type": "api",
+        "preconditions": [
+          "User is logged in and an auth token/session is available"
+        ],
+        "steps": [
+          "Send GET /me with valid auth token/session"
+        ],
+        "expected": [
+          "Response status is success (200)",
+          "Response contains the user's profile data (including fields such as name, bio, avatar URL as applicable)",
+          "Returned profile corresponds to the authenticated user"
+        ],
+        "tags": [
+          "profile",
+          "me",
+          "auth-required",
+          "happy-path"
+        ],
+        "sources": [
+          "Chunk 00feabb9-863c-47ec-9741-948202fcfbc6"
+        ]
+      },
+      {
+        "id": "T008",
+        "priority": "P0",
+        "title": "GET /me with missing or invalid token returns 401",
+        "type": "api",
+        "preconditions": [],
+        "steps": [
+          "Send GET /me without auth token/session",
+          "Send GET /me with an invalid/expired token value"
+        ],
+        "expected": [
+          "Both requests return 401 Unauthorized"
+        ],
+        "tags": [
+          "profile",
+          "me",
+          "auth",
+          "negative"
+        ],
+        "sources": [
+          "Chunk 00feabb9-863c-47ec-9741-948202fcfbc6"
+        ]
+      },
+      {
+        "id": "T009",
+        "priority": "P0",
+        "title": "PATCH /me updates name, bio, and avatar URL for authenticated user",
+        "type": "api",
+        "preconditions": [
+          "User is logged in and an auth token/session is available"
+        ],
+        "steps": [
+          "Send PATCH /me with valid auth token/session and body: {\"name\":\"Test Name\",\"bio\":\"Hello world\",\"avatarUrl\":\"https://example.com/avatar.png\"}",
+          "Send GET /me with the same auth token/session"
+        ],
+        "expected": [
+          "PATCH response indicates success",
+          "GET /me shows updated values for name, bio, and avatar URL"
+        ],
+        "tags": [
+          "profile",
+          "update",
+          "me",
+          "happy-path"
+        ],
+        "sources": [
+          "Chunk 00feabb9-863c-47ec-9741-948202fcfbc6"
+        ]
+      },
+      {
+        "id": "T010",
+        "priority": "P0",
+        "title": "PATCH /me with invalid token returns 401 and does not update profile",
+        "type": "api",
+        "preconditions": [
+          "A user exists with known current profile values"
+        ],
+        "steps": [
+          "Send PATCH /me with an invalid token and body: {\"name\":\"Hacker Name\"}",
+          "Authenticate properly as the same user and send GET /me"
+        ],
+        "expected": [
+          "PATCH returns 401 Unauthorized",
+          "Profile values remain unchanged (name is not updated)"
+        ],
+        "tags": [
+          "profile",
+          "update",
+          "auth",
+          "negative"
+        ],
+        "sources": [
+          "Chunk 00feabb9-863c-47ec-9741-948202fcfbc6"
+        ]
+      },
+      {
+        "id": "T011",
+        "priority": "P1",
+        "title": "PATCH /me supports partial updates (update only one field)",
+        "type": "api",
+        "preconditions": [
+          "User is logged in and an auth token/session is available",
+          "User has existing values for name, bio, avatar URL"
+        ],
+        "steps": [
+          "Send PATCH /me with body: {\"bio\":\"Updated bio only\"}",
+          "Send GET /me"
+        ],
+        "expected": [
+          "PATCH response indicates success",
+          "Only bio changes; name and avatar URL remain unchanged"
+        ],
+        "tags": [
+          "profile",
+          "update",
+          "partial-update"
+        ],
+        "sources": [
+          "Chunk 00feabb9-863c-47ec-9741-948202fcfbc6"
+        ]
+      },
+      {
+        "id": "T012",
+        "priority": "P0",
+        "title": "Logout invalidates current session/token",
+        "type": "api",
+        "preconditions": [
+          "User is logged in and an auth token/session is available"
+        ],
+        "steps": [
+          "Send POST /auth/logout with valid auth token/session",
+          "Send GET /me using the same token/session as before logout"
+        ],
+        "expected": [
+          "Logout response indicates success",
+          "Subsequent GET /me returns 401 Unauthorized (token/session no longer valid)"
+        ],
+        "tags": [
+          "auth",
+          "logout",
+          "session"
+        ],
+        "sources": [
+          "Chunk 00feabb9-863c-47ec-9741-948202fcfbc6"
+        ]
+      },
+      {
+        "id": "T013",
+        "priority": "P1",
+        "title": "UI: End-to-end authentication flow (register/login -> view profile -> logout)",
+        "type": "ui",
+        "preconditions": [
+          "Web UI is available for signup/login/profile",
+          "A unique email address is available for registration"
+        ],
+        "steps": [
+          "Open the app",
+          "Sign up with email and password (>=8 chars)",
+          "Log in with the same email and password (if signup does not automatically log in)",
+          "Navigate to profile page and view profile information",
+          "Log out",
+          "Attempt to navigate to the profile page again"
+        ],
+        "expected": [
+          "User can sign up and log in using email + password",
+          "After login, profile is viewable",
+          "After logout, profile is not accessible and user is prompted to log in (or otherwise blocked)"
+        ],
+        "tags": [
+          "ui",
+          "e2e",
+          "auth",
+          "profile"
+        ],
+        "sources": [
+          "Chunk 00feabb9-863c-47ec-9741-948202fcfbc6"
+        ]
+      },
+      {
+        "id": "T014",
+        "priority": "P1",
+        "title": "Integration: UI profile update persists via API and is reflected on refresh",
+        "type": "integration",
+        "preconditions": [
+          "Web UI is available for profile editing",
+          "User is registered and can log in"
+        ],
+        "steps": [
+          "Log in via UI",
+          "Edit profile fields (name, bio, avatar URL) via UI and save",
+          "Refresh the page or re-open the profile view",
+          "Optionally, call GET /me using the same session (if accessible in test harness) to confirm persisted values"
+        ],
+        "expected": [
+          "Updated name, bio, and avatar URL persist after refresh",
+          "Persisted values match what was submitted"
+        ],
+        "tags": [
+          "integration",
+          "ui-to-api",
+          "profile",
+          "persistence"
+        ],
+        "sources": [
+          "Chunk 00feabb9-863c-47ec-9741-948202fcfbc6"
+        ]
+      }
+    ]
+  }
+}
