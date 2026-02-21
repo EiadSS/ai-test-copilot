@@ -15,6 +15,7 @@ jobs:
 
       - name: Start backend (docker compose)
         run: |
+          cp .env.example .env
           docker compose up -d --build
           sleep 5
           curl -f http://localhost:8000/docs >/dev/null
