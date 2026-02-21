@@ -1,0 +1,44 @@
+name: Playwright API Tests
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      api:
+        image: python:3.12-slim
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start backend (docker compose)
+        run: |
+          docker compose up -d --build
+          sleep 5
+          curl -f http://localhost:8000/docs >/dev/null
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Playwright deps
+        working-directory: playwright/demo-project-playwright-api-tests
+        run: |
+          npm install
+          npx playwright install --with-deps
+
+      - name: Run tests
+        working-directory: playwright/demo-project-playwright-api-tests
+        env:
+          BASE_URL: http://localhost:8000/api/
+        run: npm test
+
+      - name: Upload Playwright report/artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: playwright/demo-project-playwright-api-tests/test-results
