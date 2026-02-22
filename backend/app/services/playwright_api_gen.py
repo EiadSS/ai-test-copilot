@@ -164,7 +164,7 @@ export default defineConfig({
             method, path = method_path if method_path else ("GET", "/")
 
             raw_path = path
-            req_path = raw_path.lstrip("/")  # keep baseURL (/api)
+            req_path = f"api/{raw_path.lstrip('/')}"  # always hit /api/... in CI & local
 
             payload = _infer_payload(method, raw_path, t)
             expected = t.get("expected") or []
