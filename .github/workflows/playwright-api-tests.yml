@@ -44,6 +44,7 @@ jobs:
           BASE_URL: http://localhost:8000/api/
         run: |
           cd pw/*-playwright-api-tests
+          echo "BASE_URL=$BASE_URL"
           npm test
 
       - name: Upload Playwright artifacts
