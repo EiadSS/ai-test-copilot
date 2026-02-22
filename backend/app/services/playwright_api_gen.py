@@ -105,9 +105,12 @@ export default defineConfig({
   timeout: 60_000,
   retries: 1,
   use: {
-    baseURL: process.env.BASE_URL || 'http://localhost:8000/api/',
-    trace: 'on-first-retry',
-  },
+  baseURL: (() => {
+    const b = process.env.BASE_URL || 'http://localhost:8000/api/';
+    return b.endsWith('/') ? b : `${b}/`;
+  })(),
+  trace: 'on-first-retry',
+},
 });
 """
 
