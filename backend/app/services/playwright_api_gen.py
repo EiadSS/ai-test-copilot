@@ -98,21 +98,18 @@ def generate_playwright_api_tests_zip(plan: dict, project_name: str = "AI Test C
     }
 
     playwright_config = """\
-import { defineConfig } from '@playwright/test';
+    import { defineConfig } from '@playwright/test';
 
-export default defineConfig({
-  testDir: './tests',
-  timeout: 60_000,
-  retries: 1,
-  use: {
-  baseURL: (() => {
-    const b = process.env.BASE_URL || 'http://localhost:8000/api/';
-    return b.endsWith('/') ? b : `${b}/`;
-  })(),
-  trace: 'on-first-retry',
-},
-});
-"""
+    export default defineConfig({
+      testDir: './tests',
+      timeout: 60_000,
+      retries: 1,
+      use: {
+        baseURL: process.env.BASE_URL || 'http://localhost:8000',
+        trace: 'on-first-retry',
+      },
+    });
+    """
 
     readme = f"""\
     # Playwright API Tests (generated)
@@ -137,11 +134,11 @@ export default defineConfig({
     lines.append("")
     lines.append("test.beforeAll(async ({ request }) => {")
     lines.append(
-        "  const reg = await request.post('auth/register', { data: { email: DEMO_EMAIL, password: DEMO_PASSWORD } });")
+        "  const reg = await request.post('/api/auth/register', { data: { email: DEMO_EMAIL, password: DEMO_PASSWORD } });")
     lines.append("  // 201 = created, 409 = already exists (fine for reruns)")
     lines.append("  if (![201, 409].includes(reg.status())) throw new Error(`register failed: ${reg.status()}`);")
     lines.append(
-        "  const login = await request.post('auth/login', { data: { email: DEMO_EMAIL, password: DEMO_PASSWORD } });")
+        "  const login = await request.post('/api/auth/login', { data: { email: DEMO_EMAIL, password: DEMO_PASSWORD } });")
     lines.append("  if (!login.ok()) throw new Error(`login failed: ${login.status()}`);")
     lines.append("  const body = await login.json();")
     lines.append("  AUTH_TOKEN = body.token;")
@@ -164,7 +161,7 @@ export default defineConfig({
             method, path = method_path if method_path else ("GET", "/")
 
             raw_path = path
-            req_path = f"api/{raw_path.lstrip('/')}"  # always hit /api/... in CI & local
+            req_path = f"/api/{raw_path.lstrip('/')}"
 
             payload = _infer_payload(method, raw_path, t)
             expected = t.get("expected") or []
@@ -188,12 +185,12 @@ export default defineConfig({
 
             blob = " ".join([title.lower()] + [str(x).lower() for x in expected] + [str(x).lower() for x in steps])
 
-            if "rate limit" in blob and req_path == "auth/login":
+            if "rate limit" in blob and req_path == "/api/auth/login":
                 lines.append("  // Trigger rate limit with repeated bad passwords")
                 lines.append("  let lastStatus = 0;")
                 lines.append("  for (let i = 0; i < 6; i++) {")
                 lines.append(
-                    "    const r = await request.post('auth/login', { data: { email: DEMO_EMAIL, password: 'WrongPassword123!' } });")
+                    "    const r = await request.post('/api/auth/login', { data: { email: DEMO_EMAIL, password: 'WrongPassword123!' } });")
                 lines.append("    lastStatus = r.status();")
                 lines.append("  }")
                 lines.append("  expect(lastStatus).toBe(429);")
@@ -215,7 +212,7 @@ export default defineConfig({
                 lines.append("  expect(resp.status()).toBe(429);")
             else:
                 # Register "success" can be 201 (created) or 409 (already exists) on reruns
-                if ("register succeeds" in blob) or (req_path == "auth/register" and "succeed" in blob):
+                if ("register succeeds" in blob) or (req_path == "/api/auth/register" and "succeed" in blob):
                     lines.append("  expect([201, 409]).toContain(resp.status());")
                 else:
                     lines.append("  expect([200, 201, 204]).toContain(resp.status());")
