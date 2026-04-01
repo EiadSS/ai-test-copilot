@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.db.session import init_db
 from app.api.routes import router as api_router
-from app.api.demo_auth import router as demo_auth_router
+from app.api.v1.demo_auth import router as demo_auth_router
 
 app = FastAPI(title="AI Test Automation Copilot API", version="0.1.0")
 
