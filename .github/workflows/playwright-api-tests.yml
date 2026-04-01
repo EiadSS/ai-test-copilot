@@ -20,6 +20,14 @@ jobs:
           sleep 5
           curl -f http://localhost:8000/docs >/dev/null
 
+      - name: Check auth routes
+        run: |
+          curl -i http://localhost:8000/docs
+          curl -i http://localhost:8000/openapi.json
+          curl -i -X POST http://localhost:8000/api/auth/register \
+            -H "Content-Type: application/json" \
+            -d '{"email":"ci-check@example.com","password":"Password123!"}'
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
